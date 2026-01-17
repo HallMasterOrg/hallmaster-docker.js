@@ -1,0 +1,23 @@
+{
+  "name": "hallmaster-docker-wrapper",
+  "description": "A TypeScript Docker API wrapper mainly used for the Hallmaster project.",
+  "version": "0.0.1",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
