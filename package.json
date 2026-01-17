@@ -1,5 +1,5 @@
 {
-  "name": "hallmaster-docker-wrapper",
+  "name": "@hallmaster/docker.js",
   "description": "A TypeScript Docker API wrapper mainly used for the Hallmaster project.",
   "version": "0.0.1",
   "main": "dist/index.js",
@@ -15,7 +15,9 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "tsc"
+    "build": "tsc",
+    "prepublishOnly": "pnpm run build",
+    "publish": "npm publish --access public"
   },
   "devDependencies": {
     "@types/node": "^25.0.9",
