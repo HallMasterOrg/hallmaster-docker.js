@@ -48,16 +48,22 @@ export default class DockerSocket {
     options?: {
       headers?: Record<string, string>;
       body?: string | Buffer | DataView;
+      query?: Record<string, string>;
     },
   ) {
     const url = new URL(path, this.apiBaseURL);
+    if (options?.query) {
+      for (const [k, v] of Object.entries(options.query)) {
+        url.searchParams.set(k, v);
+      }
+    }
 
     const requestOptions: http.RequestOptions = {
       hostname: url.hostname,
       host: url.host,
       protocol: url.protocol,
       port: url.port,
-      path: url.pathname,
+      path: url.pathname + url.search.toString(),
       headers: options?.headers,
       method: method,
       socketPath: this.dockerSocketPath,
@@ -138,17 +144,24 @@ export default class DockerSocket {
     options?: {
       headers?: Record<string, string>;
       body?: string | Buffer | DataView;
+      query?: Record<string, string>;
     },
   ): Promise<T> {
     const { ApiVersion } = this.version;
 
     const response = await this.request(
       method,
-      path.join("/", `v${ApiVersion}`, urlPath),
+      `/v${ApiVersion}/${urlPath.replace(/^\//, "")}`,
       options,
     );
 
-    return JSON.parse(response.body.toString("utf-8"));
+    const responseBody = response.body.toString("utf-8");
+
+    try {
+      return JSON.parse(responseBody);
+    } catch {
+      return responseBody as T;
+    }
   }
 
   async authenticate(
@@ -169,10 +182,9 @@ export default class DockerSocket {
       throw new Error("DockerSocket: Invalid credentials");
     }
 
-    this.dockerAuthToken = Buffer.from(
-      tokenPayload,
-      "utf-8",
-    ).toString("base64");
+    this.dockerAuthToken = Buffer.from(tokenPayload, "utf-8").toString(
+      "base64",
+    );
   }
 
   async info(): Promise<DockerInfo> {

@@ -1,3 +1,4 @@
+import DockerContainer from "./DockerContainer";
 import DockerSocket from "./DockerSocket";
 
 (async function () {
@@ -5,12 +6,19 @@ import DockerSocket from "./DockerSocket";
 
   await socket.init();
 
-  console.log(await socket.info());
-
   // await socket.authenticate(
   //   "ghcr.io",
   //   "github_username",
   //   "github_pat",
   // );
   // console.log(socket.token);
+
+  // console.log(await socket.info());
+
+  const containersApi = new DockerContainer(socket);
+  const containersSummary = await containersApi.stats("XXX", {
+    stream: false,
+    oneShot: true,
+  });
+  console.log(containersSummary);
 })();

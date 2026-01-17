@@ -1,0 +1,10 @@
+services:
+  openapi-server:
+    image: swaggerapi/swagger-ui
+    container_name: openapi-server
+    ports:
+      - "8080:8080"
+    environment:
+      SWAGGER_JSON: /specs/docker-engine-api.yaml
+    volumes:
+      - ./docker-engine-api-specs-v1.51.yaml:/specs/docker-engine-api.yaml:ro
