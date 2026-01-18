@@ -54,19 +54,13 @@ export class DockerSocket {
     options?: {
       headers?: Record<string, string>;
       body?: string | Buffer | DataView;
-      query?: Record<string, string | string[]>;
+      query?: Record<string, string>;
     },
   ) {
     const url = new URL(path, this.apiBaseURL);
     if (options?.query) {
       for (const [k, v] of Object.entries(options.query)) {
-        if (Array.isArray(v)) {
-          for (const element of v) {
-            url.searchParams.set(k, element);
-          }
-        } else {
-          url.searchParams.set(k, v);
-        }
+        url.searchParams.set(k, v);
       }
     }
 
@@ -176,7 +170,7 @@ export class DockerSocket {
     options?: {
       headers?: Record<string, string>;
       body?: string | Buffer | DataView;
-      query?: Record<string, string | string[]>;
+      query?: Record<string, string>;
     },
   ): Promise<T> {
     const { ApiVersion } = this.version;

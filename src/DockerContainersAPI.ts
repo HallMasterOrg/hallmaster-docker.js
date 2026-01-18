@@ -139,8 +139,8 @@ export class DockerContainersAPI {
         body: JSON.stringify(body),
         query: apiOptions,
         headers: {
-          "Content-Type": "application/json"
-        }
+          "Content-Type": "application/json",
+        },
       },
     );
   }
@@ -254,7 +254,7 @@ export class DockerContainersAPI {
       "POST",
       `/containers/prune`,
       {
-        query: filters,
+        query: { filters: JSON.stringify(filters) },
       },
     );
   }
