@@ -46,11 +46,14 @@ import { DockerContainersAPI } from "@hallmaster/docker.js";
 (async function() {
     // ...
 
-    const dockerContainersApi = new DockerContainersAPI(dockerSocket);
+    const dockerContainersApi = new DockerContainersAPI(socket);
 
     const containers = await dockerContainersApi.list();
     for (const container of containers) {
-        const containerLogs = await dockerContainersApi.logs(container.Id);
+        const containerLogs = await dockerContainersApi.logs(container.Id, {
+            stdout: true,
+            stderr: true,
+        });
         console.log("-----------");
         console.log(`Logs for the container #${container.Id}`);
         console.log(containerLogs);

@@ -1,5 +1,8 @@
 import { DockerSocket } from "./DockerSocket.js";
 import type { DockerContainer } from "./types/DockerContainer.js";
+import type { DockerContainerCreated } from "./types/DockerContainerCreated.js";
+import type { DockerContainerCreationBody } from "./types/DockerContainerCreationBody.js";
+import type { DockerContainerPrune } from "./types/DockerContainerPrune.js";
 import type { DockerContainerStats } from "./types/DockerContainerStats.js";
 import type { DockerContainerSummary } from "./types/DockerContainerSummary.js";
 import type { DockerContainerTop } from "./types/DockerContainerTop.js";
@@ -14,7 +17,7 @@ export class DockerContainersAPI {
       size?: boolean;
       filters?: Record<string, string[]>;
     } = { all: false, limit: 0, size: false, filters: {} },
-  ) {
+  ): Promise<DockerContainerSummary[]> {
     const apiOptions = {
       all: (options.all ?? false).toString(),
       limit: (options.limit ?? 0).toString(),
@@ -22,7 +25,7 @@ export class DockerContainersAPI {
       filters: JSON.stringify(options.filters ?? {}),
     };
 
-    return await this.dockerSocket.apiCall<DockerContainerSummary>(
+    return await this.dockerSocket.apiCall<DockerContainerSummary[]>(
       "GET",
       "/containers/json",
       {
@@ -108,6 +111,150 @@ export class DockerContainersAPI {
       `/containers/${containerId}/stats`,
       {
         query: apiOptions,
+      },
+    );
+  }
+
+  async create(
+    body: Partial<DockerContainerCreationBody>,
+    name?: string,
+    platform?: string, // linux/arm64/v8, linux/amd64, ...
+  ): Promise<DockerContainerCreated> {
+    if (name !== undefined && !/[a-zA-Z0-9][a-zA-Z0-9_.-]+/.test(name)) {
+      throw new Error("DockerContainerAPI: Invalid container name");
+    }
+
+    const apiOptions: Record<string, string> = {};
+    if (name !== undefined) {
+      apiOptions.name = name;
+    }
+    if (platform !== undefined) {
+      apiOptions.platform = platform;
+    }
+
+    return await this.dockerSocket.apiCall<DockerContainerCreated>(
+      "POST",
+      "/containers/create",
+      {
+        body: JSON.stringify(body),
+        query: apiOptions,
+        headers: {
+          "Content-Type": "application/json"
+        }
+      },
+    );
+  }
+
+  async start(containerId: string, detachKeys?: string) {
+    if (
+      detachKeys !== undefined &&
+      !/^(?:(ctrl-[a-z@\^\[,_])|[a-z]{1})$/.test(detachKeys)
+    ) {
+      throw new Error("DockerContainersAPI: Invalid detachKeys sequence");
+    }
+
+    const apiOptions: Record<string, string> = {};
+    if (detachKeys !== undefined) {
+      apiOptions.detachKeys = detachKeys;
+    }
+
+    await this.dockerSocket.apiCall<void>(
+      "POST",
+      `/containers/${containerId}/start`,
+      {
+        query: apiOptions,
+      },
+    );
+  }
+
+  async stop(
+    containerId: string,
+    signal: string = "SIGINT",
+    timeout: number = 10,
+  ) {
+    const apiOptions: Record<string, string> = {};
+    if (signal !== undefined) {
+      apiOptions.signal = signal;
+    }
+
+    if (timeout !== undefined) {
+      apiOptions.timeout = timeout.toString();
+    }
+
+    await this.dockerSocket.apiCall<void>(
+      "POST",
+      `/containers/${containerId}/stop`,
+      {
+        query: apiOptions,
+      },
+    );
+  }
+
+  async restart(
+    containerId: string,
+    signal: string = "SIGINT",
+    timeout: number = 10,
+  ) {
+    const apiOptions: Record<string, string> = {};
+    if (signal !== undefined) {
+      apiOptions.signal = signal;
+    }
+
+    if (timeout !== undefined) {
+      apiOptions.timeout = timeout.toString();
+    }
+
+    await this.dockerSocket.apiCall<void>(
+      "POST",
+      `/containers/${containerId}/restart`,
+      {
+        query: apiOptions,
+      },
+    );
+  }
+
+  async kill(containerId: string, signal: string = "SIGKILL") {
+    const apiOptions: Record<string, string> = {};
+    if (signal !== undefined) {
+      apiOptions.signal = signal;
+    }
+
+    await this.dockerSocket.apiCall<void>(
+      "POST",
+      `/containers/${containerId}/kill`,
+      {
+        query: apiOptions,
+      },
+    );
+  }
+
+  async pause(containerId: string) {
+    await this.dockerSocket.apiCall<void>(
+      "POST",
+      `/containers/${containerId}/pause`,
+    );
+  }
+
+  async unpause(containerId: string) {
+    await this.dockerSocket.apiCall<void>(
+      "POST",
+      `/containers/${containerId}/unpause`,
+    );
+  }
+
+  async remove(containerId: string) {
+    await this.dockerSocket.apiCall<void>(
+      "DELETE",
+      `/containers/${containerId}`,
+    );
+  }
+
+  async prune(filters: Record<string, string[]> = {}) {
+    return await this.dockerSocket.apiCall<DockerContainerPrune>(
+      "POST",
+      `/containers/prune`,
+      {
+        query: filters,
       },
     );
   }

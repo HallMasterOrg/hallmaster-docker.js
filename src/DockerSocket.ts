@@ -10,6 +10,13 @@ declare interface HttpResponse {
   body: Buffer<ArrayBuffer>;
 }
 
+class DockerAPIHttpError {
+  constructor(
+    readonly status: number,
+    readonly reason?: string,
+  ) {}
+}
+
 export class DockerSocket {
   private dockerSocketPath: string;
 
@@ -47,13 +54,19 @@ export class DockerSocket {
     options?: {
       headers?: Record<string, string>;
       body?: string | Buffer | DataView;
-      query?: Record<string, string>;
+      query?: Record<string, string | string[]>;
     },
   ) {
     const url = new URL(path, this.apiBaseURL);
     if (options?.query) {
       for (const [k, v] of Object.entries(options.query)) {
-        url.searchParams.set(k, v);
+        if (Array.isArray(v)) {
+          for (const element of v) {
+            url.searchParams.set(k, element);
+          }
+        } else {
+          url.searchParams.set(k, v);
+        }
       }
     }
 
@@ -71,19 +84,39 @@ export class DockerSocket {
     return new Promise<HttpResponse>((resolve, reject) => {
       const request = http.request(requestOptions, (response) => {
         if (null !== response.errored) {
-          reject(response.errored);
+          reject(
+            new DockerAPIHttpError(
+              response.statusCode ?? 999,
+              response.errored.message,
+            ),
+          );
           return;
         }
 
-        response.once("error", reject);
+        response.once("error", (err) =>
+          reject(new DockerAPIHttpError(999, err.message)),
+        );
 
         let bodyChunks: HttpResponse["body"][] = [];
 
         response.on("data", (data) => bodyChunks.push(data));
 
-        response.once("end", () =>
-          resolve({ response, body: Buffer.concat(bodyChunks) }),
-        );
+        response.once("end", () => {
+          if (response.statusCode && response.statusCode >= 300) {
+            const reason = Buffer.concat(bodyChunks).toString("utf-8");
+            try {
+              reject(
+                new DockerAPIHttpError(
+                  response.statusCode,
+                  JSON.parse(reason)["message"],
+                ),
+              );
+            } catch {
+              reject(new DockerAPIHttpError(response.statusCode, reason));
+            }
+          }
+          resolve({ response, body: Buffer.concat(bodyChunks) });
+        });
       });
 
       request.once("error", reject);
@@ -143,7 +176,7 @@ export class DockerSocket {
     options?: {
       headers?: Record<string, string>;
       body?: string | Buffer | DataView;
-      query?: Record<string, string>;
+      query?: Record<string, string | string[]>;
     },
   ): Promise<T> {
     const { ApiVersion } = this.version;
