@@ -1,11 +1,11 @@
 import { DockerSocket } from "./DockerSocket.js";
-import type { DockerContainer } from "./types/DockerContainer.js";
-import type { DockerContainerCreated } from "./types/DockerContainerCreated.js";
-import type { DockerContainerCreationBody } from "./types/DockerContainerCreationBody.js";
-import type { DockerContainerPrune } from "./types/DockerContainerPrune.js";
-import type { DockerContainerStats } from "./types/DockerContainerStats.js";
-import type { DockerContainerSummary } from "./types/DockerContainerSummary.js";
-import type { DockerContainerTop } from "./types/DockerContainerTop.js";
+import type { DockerContainer } from "./types/containers/DockerContainer.js";
+import type { DockerContainerCreated } from "./types/containers/DockerContainerCreated.js";
+import type { DockerContainerCreationBody } from "./types/containers/DockerContainerCreationBody.js";
+import type { DockerContainerPrune } from "./types/containers/DockerContainerPrune.js";
+import type { DockerContainerStats } from "./types/containers/DockerContainerStats.js";
+import type { DockerContainerSummary } from "./types/containers/DockerContainerSummary.js";
+import type { DockerContainerTop } from "./types/containers/DockerContainerTop.js";
 
 export class DockerContainersAPI {
   constructor(private readonly dockerSocket: DockerSocket) {}

@@ -7,19 +7,7 @@ async function sleep(ms: number): Promise<void> {
 (async function () {
   const socket = new DockerSocket();
 
-  await socket.init(); // prepare the UNIX socket to be used
-
-  // if you want, you may authenticate to a Docker Image registry
-  // await socket.authenticate(
-  //   "ghcr.io",
-  //   "github_username",
-  //   "github_pat",
-  // );
-  // console.log(socket.token);
-
-  // you can get the information of the API from the socket such as the version
-  // of the Docker Engine
-  console.log(await socket.info());
+  await socket.init();
 
   const dockerContainersApi = new DockerContainersAPI(socket);
 

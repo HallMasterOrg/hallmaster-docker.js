@@ -1,9 +1,11 @@
 import http from "node:http";
 import fs from "node:fs/promises";
+import { Readable } from "node:stream";
 import type { Stats } from "node:fs";
-import type { DockerVersion } from "./types/DockerVersion.js";
-import type { DockerInfo } from "./types/DockerInfo.js";
-import type { DockerAuthToken } from "./types/DockerAuthToken.js";
+import type { DockerVersion } from "./types/system/DockerVersion.js";
+import type { DockerInfo } from "./types/system/DockerInfo.js";
+import type { DockerAuthToken } from "./types/auth/DockerAuthToken.js";
+import type { DockerRegistryCredential } from "./types/auth/DockerRegistryCredential.js";
 
 declare interface HttpResponse {
   response: http.IncomingMessage;
@@ -25,8 +27,6 @@ export class DockerSocket {
   private dockerSocketPath: string;
 
   private dockerVersion: DockerVersion | null = null;
-
-  private dockerAuthToken: string | null = null;
 
   constructor(
     unixSocketPath: string = "/var/run/docker.sock",
@@ -52,19 +52,34 @@ export class DockerSocket {
     return stat.isSocket();
   }
 
+  private static isReadableStream(obj: any): obj is Readable {
+    return (
+      obj && typeof obj.pipe === "function" && typeof obj.read === "function"
+    );
+  }
+
   private async request(
     method: Request["method"],
     path: string | URL,
     options?: {
       headers?: Record<string, string>;
-      body?: string | Buffer | DataView;
-      query?: Record<string, string>;
+      body?: string | Buffer | DataView | Readable;
+      query?: Record<string, string | string[] | undefined>;
     },
   ) {
     const url = new URL(path, this.apiBaseURL);
     if (options?.query) {
       for (const [k, v] of Object.entries(options.query)) {
-        url.searchParams.set(k, v);
+        if (v === undefined) {
+          continue;
+        }
+        if (!Array.isArray(v)) {
+          url.searchParams.set(k, v);
+          continue;
+        }
+        for (const element of v) {
+          url.searchParams.set(k, element);
+        }
       }
     }
 
@@ -91,9 +106,9 @@ export class DockerSocket {
           return;
         }
 
-        response.once("error", (err) =>
-          reject(new DockerAPIHttpError(999, err.message)),
-        );
+        response.once("error", (err) => {
+          reject(new DockerAPIHttpError(999, err.message));
+        });
 
         let bodyChunks: HttpResponse["body"][] = [];
 
@@ -112,12 +127,19 @@ export class DockerSocket {
             } catch {
               reject(new DockerAPIHttpError(response.statusCode, reason));
             }
+          } else {
+            resolve({ response, body: Buffer.concat(bodyChunks) });
           }
-          resolve({ response, body: Buffer.concat(bodyChunks) });
         });
       });
 
       request.once("error", reject);
+
+      if (DockerSocket.isReadableStream(options?.body)) {
+        options.body.pipe(request);
+        options.body.once("error", (err) => request.destroy(err));
+        return;
+      }
 
       if (undefined !== options?.body) {
         const body =
@@ -125,16 +147,15 @@ export class DockerSocket {
             ? options.body
             : Buffer.from(options.body.toString("utf-8"));
 
-        const contentLength =
-          options?.headers?.["Content-Length"] ??
-          options?.headers?.["Transfer-Encoding"] ??
-          null;
-
-        if (null === contentLength) {
+        if (
+          !options?.headers?.["Content-Length"] &&
+          !options?.headers?.["Transfer-Encoding"]
+        ) {
           request.setHeader("Content-Length", Buffer.byteLength(body));
         }
 
-        request.write(body);
+        request.end(body);
+        return;
       }
 
       request.end();
@@ -161,20 +182,13 @@ export class DockerSocket {
     return this.dockerVersion;
   }
 
-  get token() {
-    if (null === this.dockerAuthToken) {
-      throw new Error("DockerSocket: Unauthorized");
-    }
-    return this.dockerAuthToken;
-  }
-
   async apiCall<T>(
     method: Request["method"],
     urlPath: string,
     options?: {
       headers?: Record<string, string>;
-      body?: string | Buffer | DataView;
-      query?: Record<string, string>;
+      body?: string | Buffer | DataView | Readable;
+      query?: Record<string, string | string[] | undefined>;
     },
   ): Promise<T> {
     const { ApiVersion } = this.version;
@@ -189,17 +203,29 @@ export class DockerSocket {
 
     try {
       return JSON.parse(responseBody);
-    } catch {
+    } catch (e) {
+      responseBody.split(/\r\n/).forEach((line) => {
+        let parsedLine: ReturnType<typeof JSON.parse>;
+        try {
+          parsedLine = JSON.parse(line);
+        } catch {
+          return;
+        }
+
+        if ("error" in parsedLine) {
+          throw new DockerAPIHttpError(
+            response.response.statusCode ?? 400,
+            parsedLine["error"],
+          );
+        }
+      });
+
       return responseBody as T;
     }
   }
 
-  async authenticate(
-    serverAddress: string,
-    username: string,
-    password: string,
-  ): Promise<void> {
-    const tokenPayload = JSON.stringify({ serverAddress, username, password });
+  async authenticate(credential: DockerRegistryCredential): Promise<string> {
+    const tokenPayload = JSON.stringify(credential);
 
     const response = await this.apiCall<DockerAuthToken>("POST", "/auth", {
       headers: {
@@ -212,9 +238,7 @@ export class DockerSocket {
       throw new Error("DockerSocket: Invalid credentials");
     }
 
-    this.dockerAuthToken = Buffer.from(tokenPayload, "utf-8").toString(
-      "base64",
-    );
+    return Buffer.from(tokenPayload, "utf-8").toString("base64");
   }
 
   async info(): Promise<DockerInfo> {
