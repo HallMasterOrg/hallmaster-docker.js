@@ -287,4 +287,37 @@ export class DockerImagesAPI {
       options?.auth,
     );
   }
+
+  async get(
+    imageName: string, // registry.example.com/myimage, don't provide a tag here
+    options: {
+      platform?:
+        | {
+            os: string; // linux
+          }
+        | {
+            os: string; // linux
+            architecture: string; // arm
+          }
+        | {
+            os: string; // linux
+            architecture: string; // arm
+            variant: string; // v8
+          };
+    } = {
+      platform: undefined,
+    },
+  ) {
+    const apiOptions: Record<string, string | undefined> = {
+      platform: options.platform ? JSON.stringify(options.platform) : undefined,
+    };
+
+    return await this.dockerSocket.streamAPICall(
+      "GET",
+      `/images/${imageName}/get`,
+      {
+        query: apiOptions,
+      },
+    );
+  }
 }

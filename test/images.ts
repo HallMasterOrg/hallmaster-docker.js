@@ -10,7 +10,7 @@ import { pack } from "tar-fs"; // create a Readable tarball for build context
 
   await socket.init();
 
-  const dockerImagesApi = new DockerImagesAPI(socket);
+  const dockerImagesAPI = new DockerImagesAPI(socket);
 
   const imageName = "dockerjs-test-image";
   const tag = "latest";
@@ -19,12 +19,12 @@ import { pack } from "tar-fs"; // create a Readable tarball for build context
   const buildContext = pack("./test/context");
 
   // build the image
-  await dockerImagesApi.build(buildContext, [], {
+  await dockerImagesAPI.build(buildContext, [], {
     tag: `${imageName}:${tag}`,
   });
 
   // lookup all images
-  const images = await dockerImagesApi.list({
+  const images = await dockerImagesAPI.list({
     all: true,
   });
 
@@ -46,20 +46,20 @@ import { pack } from "tar-fs"; // create a Readable tarball for build context
   const taggedImageName = `${registryCredential.serveraddress}/${registryCredential.username}/${imageName}`;
 
   // tag the image
-  await dockerImagesApi.tag(imageName, {
+  await dockerImagesAPI.tag(imageName, {
     repo: taggedImageName,
     tag: tag,
   });
 
   // push the image
-  await dockerImagesApi.push(taggedImageName, {
+  await dockerImagesAPI.push(taggedImageName, {
     tag: tag,
     auth: registryCredential,
   });
 
   // remove the image for test cleanup
   for (const imageNameToDelete of [imageName, taggedImageName]) {
-    const deletedImages = await dockerImagesApi.remove(imageNameToDelete, {
+    const deletedImages = await dockerImagesAPI.remove(imageNameToDelete, {
       force: true,
       noPrune: false,
     });
@@ -77,13 +77,13 @@ import { pack } from "tar-fs"; // create a Readable tarball for build context
   }
 
   // pull an image from remote registry
-  await dockerImagesApi.create({
+  await dockerImagesAPI.create({
     fromImage: "nginx",
     tag: "latest",
   });
 
   // pull an image from remote private registry
-  await dockerImagesApi.create({
+  await dockerImagesAPI.create({
     fromImage: taggedImageName,
     auth: registryCredential,
   });

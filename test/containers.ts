@@ -1,4 +1,8 @@
-import { DockerContainersAPI, DockerSocket } from "@hallmaster/docker.js";
+import {
+  DockerContainersAPI,
+  DockerImagesAPI,
+  DockerSocket,
+} from "@hallmaster/docker.js";
 
 async function sleep(ms: number): Promise<void> {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -9,11 +13,20 @@ async function sleep(ms: number): Promise<void> {
 
   await socket.init();
 
-  const dockerContainersApi = new DockerContainersAPI(socket);
+  const dockerImagesAPI = new DockerImagesAPI(socket);
 
-  const containers = await dockerContainersApi.list();
+  console.log("Downloading Redis image...");
+  await dockerImagesAPI.create({
+    fromImage: "redis",
+    tag: "8.2.1-bookworm",
+  });
+  console.log("Redis image downloaded.");
+
+  const dockerContainersAPI = new DockerContainersAPI(socket);
+
+  const containers = await dockerContainersAPI.list();
   for (const container of containers) {
-    const containerLogs = await dockerContainersApi.logs(container.Id, {
+    const containerLogs = await dockerContainersAPI.logs(container.Id, {
       stdout: true,
       stderr: true,
     });
@@ -23,7 +36,7 @@ async function sleep(ms: number): Promise<void> {
     console.log("-----------");
   }
 
-  const createdContainer = await dockerContainersApi.create(
+  const createdContainer = await dockerContainersAPI.create(
     {
       Image: "redis:8.2.1-bookworm",
       Labels: {
@@ -37,11 +50,11 @@ async function sleep(ms: number): Promise<void> {
     console.warn(`[CONTAINER WARNING]: ${warning}`);
   }
 
-  await dockerContainersApi.start(createdContainer.Id);
+  await dockerContainersAPI.start(createdContainer.Id);
 
   await sleep(2000);
 
-  const logs = await dockerContainersApi.logs(createdContainer.Id, {
+  const logs = await dockerContainersAPI.logs(createdContainer.Id, {
     stderr: true,
     stdout: true,
   });
@@ -51,14 +64,14 @@ async function sleep(ms: number): Promise<void> {
   console.log("--- REDIS TEST CONTAINER LOGS END ---");
 
   console.log("Killing test container");
-  await dockerContainersApi.kill(createdContainer.Id);
+  await dockerContainersAPI.kill(createdContainer.Id);
   console.log("Test container killed");
 
   console.log("Removing test container");
-  await dockerContainersApi.remove(createdContainer.Id);
+  await dockerContainersAPI.remove(createdContainer.Id);
   console.log("Test container removed");
 
-  const availableContainers = await dockerContainersApi.list({ all: true });
+  const availableContainers = await dockerContainersAPI.list({ all: true });
   const isAnyContainerMatchingTestContainer = availableContainers.filter(
     (container) => container.Id === createdContainer.Id,
   );

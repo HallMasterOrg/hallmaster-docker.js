@@ -58,108 +58,118 @@ export class DockerSocket {
     );
   }
 
-  private async request(
-    method: Request["method"],
+  private async _rawRequest(
+    method: string,
     path: string | URL,
     options?: {
       headers?: Record<string, string>;
       body?: string | Buffer | DataView | Readable;
       query?: Record<string, string | string[] | undefined>;
     },
-  ) {
-    const url = new URL(path, this.apiBaseURL);
+  ): Promise<http.IncomingMessage> {
+    const url = new URL(path.toString(), this.apiBaseURL);
     if (options?.query) {
       for (const [k, v] of Object.entries(options.query)) {
-        if (v === undefined) {
-          continue;
-        }
-        if (!Array.isArray(v)) {
-          url.searchParams.set(k, v);
-          continue;
-        }
-        for (const element of v) {
-          url.searchParams.set(k, element);
-        }
+        if (!v) continue;
+        if (Array.isArray(v))
+          v.forEach((val) => url.searchParams.append(k, val));
+        else url.searchParams.set(k, v);
       }
     }
 
-    const requestOptions: http.RequestOptions = {
+    const reqOptions: http.RequestOptions = {
       hostname: url.hostname,
       host: url.host,
       protocol: url.protocol,
       port: url.port,
-      path: url.pathname + url.search.toString(),
+      path: url.pathname + url.search,
       headers: options?.headers,
-      method: method,
+      method,
       socketPath: this.dockerSocketPath,
     };
 
-    return new Promise<HttpResponse>((resolve, reject) => {
-      const request = http.request(requestOptions, (response) => {
-        if (null !== response.errored) {
-          reject(
-            new DockerAPIHttpError(
-              response.statusCode ?? 999,
-              response.errored.message,
-            ),
-          );
-          return;
-        }
-
-        response.once("error", (err) => {
-          reject(new DockerAPIHttpError(999, err.message));
-        });
-
-        let bodyChunks: HttpResponse["body"][] = [];
-
-        response.on("data", (data) => bodyChunks.push(data));
-
-        response.once("end", () => {
-          if (response.statusCode && response.statusCode >= 300) {
-            const reason = Buffer.concat(bodyChunks).toString("utf-8");
-            try {
-              reject(
-                new DockerAPIHttpError(
-                  response.statusCode,
-                  JSON.parse(reason)["message"],
-                ),
-              );
-            } catch {
-              reject(new DockerAPIHttpError(response.statusCode, reason));
-            }
-          } else {
-            resolve({ response, body: Buffer.concat(bodyChunks) });
-          }
-        });
+    return new Promise((resolve, reject) => {
+      const req = http.request(reqOptions, (res) => {
+        if (!res) return reject(new DockerAPIHttpError(500, "No response"));
+        resolve(res);
       });
 
-      request.once("error", reject);
+      req.once("error", reject);
 
       if (DockerSocket.isReadableStream(options?.body)) {
-        options.body.pipe(request);
-        options.body.once("error", (err) => request.destroy(err));
-        return;
-      }
-
-      if (undefined !== options?.body) {
-        const body =
-          options.body instanceof Buffer
-            ? options.body
-            : Buffer.from(options.body.toString("utf-8"));
-
+        options.body.pipe(req);
+        options.body.once("error", (err) => req.destroy(err));
+      } else if (options?.body !== undefined) {
+        const body = Buffer.isBuffer(options.body)
+          ? options.body
+          : Buffer.from(options.body.toString(), "utf-8");
         if (
-          !options?.headers?.["Content-Length"] &&
-          !options?.headers?.["Transfer-Encoding"]
+          !options.headers?.["Content-Length"] &&
+          !options.headers?.["Transfer-Encoding"]
         ) {
-          request.setHeader("Content-Length", Buffer.byteLength(body));
+          req.setHeader("Content-Length", Buffer.byteLength(body));
         }
-
-        request.end(body);
-        return;
+        req.end(body);
+      } else {
+        req.end();
       }
-
-      request.end();
     });
+  }
+
+  private async request(
+    method: string,
+    path: string | URL,
+    options?: {
+      headers?: Record<string, string>;
+      body?: string | Buffer | DataView | Readable;
+      query?: Record<string, string | string[] | undefined>;
+    },
+  ): Promise<{ response: http.IncomingMessage; body: Buffer }> {
+    const res = await this._rawRequest(method, path, options);
+    return new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => {
+        const body = Buffer.concat(chunks);
+        if (res.statusCode && res.statusCode >= 300) {
+          return reject(
+            new DockerAPIHttpError(res.statusCode, body.toString()),
+          );
+        }
+        resolve({ response: res, body });
+      });
+      res.on("error", (err) =>
+        reject(new DockerAPIHttpError(500, err.message)),
+      );
+    });
+  }
+
+  private async stream(
+    method: string,
+    path: string | URL,
+    options?: {
+      headers?: Record<string, string>;
+      body?: string | Buffer | DataView | Readable;
+      query?: Record<string, string | string[] | undefined>;
+    },
+  ): Promise<Readable> {
+    const res = await this._rawRequest(method, path, options);
+    if (res.statusCode && res.statusCode >= 400) {
+      // buffer error body
+      const chunks: Buffer[] = [];
+      return new Promise((_, reject) => {
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () =>
+          reject(
+            new DockerAPIHttpError(
+              res.statusCode!,
+              Buffer.concat(chunks).toString(),
+            ),
+          ),
+        );
+      });
+    }
+    return res;
   }
 
   async init(): Promise<void> {
@@ -238,6 +248,40 @@ export class DockerSocket {
 
       return responseBody as T;
     }
+  }
+
+  async streamAPICall(
+    method: Request["method"],
+    urlPath: string,
+    options?: {
+      headers?: Record<string, string>;
+      body?: string | Buffer | DataView | Readable;
+      query?: Record<string, string | string[] | undefined>;
+    },
+    auth?: { identitytoken: string } | DockerRegistryCredential,
+  ): Promise<Readable> {
+    const { ApiVersion } = this.version;
+
+    const headers = options?.headers ?? {};
+    if (auth !== undefined) {
+      if ("identitytoken" in auth) {
+        headers["X-Registry-Auth"] = auth.identitytoken;
+      } else {
+        headers["X-Registry-Auth"] = Buffer.from(JSON.stringify(auth)).toString(
+          "base64",
+        );
+      }
+    }
+
+    return await this.stream(
+      method,
+      `/v${ApiVersion}/${urlPath.replace(/^\//, "")}`,
+      {
+        body: options?.body,
+        headers: headers,
+        query: options?.query,
+      },
+    );
   }
 
   async authenticate(credential: DockerRegistryCredential): Promise<string> {
