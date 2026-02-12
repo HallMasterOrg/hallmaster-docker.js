@@ -9,7 +9,7 @@ import { DockerImagesAPI, DockerSocket } from "@hallmaster/docker.js";
 
   const dockerImagesAPI = new DockerImagesAPI(socket);
 
-  const imageName = "dockerjs-test-image";
+  const imageName = "dockerjs-test-image1";
   const tag = "latest";
 
   // create the Readable build context

@@ -12,7 +12,7 @@ import { pack } from "tar-fs"; // create a Readable tarball for build context
 
   const dockerImagesAPI = new DockerImagesAPI(socket);
 
-  const imageName = "dockerjs-test-image";
+  const imageName = "dockerjs-test-image0";
   const tag = "latest";
 
   // create the Readable build context
