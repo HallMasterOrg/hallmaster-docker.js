@@ -2,6 +2,7 @@ import { DockerSocket } from "./DockerSocket.js";
 import type { DockerContainer } from "./types/containers/DockerContainer.js";
 import type { DockerContainerCreated } from "./types/containers/DockerContainerCreated.js";
 import type { DockerContainerCreationBody } from "./types/containers/DockerContainerCreationBody.js";
+import type { DockerContainerLogs } from "./types/containers/DockerContainerLogs.js";
 import type { DockerContainerPrune } from "./types/containers/DockerContainerPrune.js";
 import type { DockerContainerStats } from "./types/containers/DockerContainerStats.js";
 import type { DockerContainerSummary } from "./types/containers/DockerContainerSummary.js";
@@ -80,13 +81,41 @@ export class DockerContainersAPI {
       tail: (options?.tail ?? "all").toString(),
     };
 
-    return await this.dockerSocket.apiCall<string>(
+    const buffer = await this.dockerSocket.bufferApiCall(
       "GET",
       `/containers/${containerId}/logs`,
       {
         query: apiOptions,
       },
     );
+
+    return DockerContainersAPI.demuxDockerStream(buffer);
+  }
+
+  private static demuxDockerStream(buffer: Buffer): DockerContainerLogs {
+    let offset = 0;
+    const stderrChunks: string[] = [];
+    const stdoutChunks: string[] = [];
+
+    while (offset + 8 <= buffer.length) {
+      const isStderr = buffer[offset] === 1;
+      const size = buffer.readUInt32BE(offset + 4);
+      offset += 8;
+
+      if (offset + size > buffer.length) break;
+      const chunk = buffer.subarray(offset, offset + size).toString("utf-8");
+      if (isStderr) {
+        stderrChunks.push(chunk);
+      } else {
+        stdoutChunks.push(chunk);
+      }
+      offset += size;
+    }
+
+    return {
+      stderr: stderrChunks.join(""),
+      stdout: stdoutChunks.join(""),
+    };
   }
 
   async stats(

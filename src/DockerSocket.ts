@@ -253,6 +253,42 @@ export class DockerSocket {
     }
   }
 
+  async bufferApiCall(
+    method: Request["method"],
+    urlPath: string,
+    options?: {
+      headers?: Record<string, string>;
+      body?: string | Buffer | DataView | Readable;
+      query?: Record<string, string | string[] | undefined>;
+    },
+    auth?: { identitytoken: string } | DockerRegistryCredential,
+  ): Promise<Buffer> {
+    const { ApiVersion } = this.version;
+
+    const headers = options?.headers ?? {};
+    if (auth !== undefined) {
+      if ("identitytoken" in auth) {
+        headers["X-Registry-Auth"] = auth.identitytoken;
+      } else {
+        headers["X-Registry-Auth"] = Buffer.from(JSON.stringify(auth)).toString(
+          "base64",
+        );
+      }
+    }
+
+    const response = await this.request(
+      method,
+      `/v${ApiVersion}/${urlPath.replace(/^\//, "")}`,
+      {
+        body: options?.body,
+        headers: headers,
+        query: options?.query,
+      },
+    );
+
+    return response.body;
+  }
+
   async streamAPICall(
     method: Request["method"],
     urlPath: string,
