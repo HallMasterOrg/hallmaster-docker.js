@@ -6,6 +6,7 @@ import type { DockerVersion } from "./types/system/DockerVersion.js";
 import type { DockerInfo } from "./types/system/DockerInfo.js";
 import type { DockerAuthToken } from "./types/auth/DockerAuthToken.js";
 import type { DockerRegistryCredential } from "./types/auth/DockerRegistryCredential.js";
+import { isDataView } from "node:util/types";
 
 declare interface HttpResponse {
   response: http.IncomingMessage;
@@ -70,7 +71,7 @@ export class DockerSocket {
     const url = new URL(path.toString(), this.apiBaseURL);
     if (options?.query) {
       for (const [k, v] of Object.entries(options.query)) {
-        if (!v) continue;
+        if (v === undefined) continue;
         if (Array.isArray(v))
           v.forEach((val) => url.searchParams.append(k, val));
         else url.searchParams.set(k, v);
@@ -100,9 +101,11 @@ export class DockerSocket {
         options.body.pipe(req);
         options.body.once("error", (err) => req.destroy(err));
       } else if (options?.body !== undefined) {
-        const body = Buffer.isBuffer(options.body)
-          ? options.body
-          : Buffer.from(options.body.toString(), "utf-8");
+        const body =
+          Buffer.isBuffer(options.body) || isDataView(options.body)
+            ? Buffer.from(options.body.buffer)
+            : Buffer.from(options.body, "utf-8");
+
         if (
           !options.headers?.["Content-Length"] &&
           !options.headers?.["Transfer-Encoding"]
@@ -131,7 +134,7 @@ export class DockerSocket {
       res.on("data", (chunk) => chunks.push(chunk));
       res.on("end", () => {
         const body = Buffer.concat(chunks);
-        if (res.statusCode && res.statusCode >= 300) {
+        if (res.statusCode && res.statusCode >= 400) {
           return reject(
             new DockerAPIHttpError(res.statusCode, body.toString()),
           );
