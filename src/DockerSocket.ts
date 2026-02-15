@@ -8,12 +8,7 @@ import type { DockerAuthToken } from "./types/auth/DockerAuthToken.js";
 import type { DockerRegistryCredential } from "./types/auth/DockerRegistryCredential.js";
 import { isDataView } from "node:util/types";
 
-declare interface HttpResponse {
-  response: http.IncomingMessage;
-  body: Buffer<ArrayBuffer>;
-}
-
-class DockerAPIHttpError extends Error {
+export class DockerAPIHttpError extends Error {
   constructor(
     readonly status: number,
     readonly reason?: string,
