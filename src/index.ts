@@ -15,6 +15,6 @@ export type { DockerImageDeleted } from "./types/images/DockerImageDeleted.js";
 export type { DockerInfo } from "./types/system/DockerInfo.js";
 export type { DockerVersion } from "./types/system/DockerVersion.js";
 
-export { DockerSocket } from "./DockerSocket.js";
-export { DockerContainersAPI } from "./DockerContainersAPI.js";
-export { DockerImagesAPI } from "./DockerImagesAPI.js";
+export * from "./DockerSocket.js";
+export * from "./DockerContainersAPI.js";
+export * from "./DockerImagesAPI.js";
