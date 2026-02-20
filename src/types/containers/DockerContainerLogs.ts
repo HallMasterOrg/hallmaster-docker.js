@@ -1,4 +1,4 @@
-export interface DockerContainerLogs {
-  stderr: string;
-  stdout: string;
+export interface DockerContainerLog {
+  content: string;
+  stream: "STDOUT" | "STDERR";
 }

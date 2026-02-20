@@ -5,6 +5,7 @@ export type { DockerContainer } from "./types/containers/DockerContainer.js";
 export type { DockerContainerStats } from "./types/containers/DockerContainerStats.js";
 export type { DockerContainerSummary } from "./types/containers/DockerContainerSummary.js";
 export type { DockerContainerTop } from "./types/containers/DockerContainerTop.js";
+export type { DockerContainerLog } from "./types/containers/DockerContainerLogs.js";
 export type { DockerContainerCreationBody } from "./types/containers/DockerContainerCreationBody.js";
 export type { DockerContainerCreated } from "./types/containers/DockerContainerCreated.js";
 export type { DockerContainerPrune } from "./types/containers/DockerContainerPrune.js";
