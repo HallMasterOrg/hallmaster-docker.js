@@ -15,8 +15,8 @@
   "files": [
     "dist"
   ],
-  "repository": "github:hallmasterorg/hallmaster-docker.js",
-  "homepage": "https://github.com/hallmasterorg/hallmaster-docker.js#readme",
+  "repository": "github:hallmasterorg/docker.js",
+  "homepage": "https://github.com/hallmasterorg/docker.js#readme",
   "scripts": {
     "clean": "rm -rf dist",
     "build": "tsc",
