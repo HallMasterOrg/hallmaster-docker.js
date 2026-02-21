@@ -1,4 +1,23 @@
+# Node modules
 node_modules/
-dist/
+
+# Env
 .env
-auth
+
+
+# Dist
+dist/
+
+# pnpm
+.pnpm/
+.pnpm-store/
+
+
+# Misc
+bun.lock
+.tmp
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+.DS_Store
