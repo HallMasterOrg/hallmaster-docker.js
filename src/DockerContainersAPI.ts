@@ -1,3 +1,4 @@
+import { Readable, Transform } from "node:stream";
 import { DockerSocket } from "./DockerSocket.js";
 import type { DockerContainer } from "./types/containers/DockerContainer.js";
 import type { DockerContainerCreated } from "./types/containers/DockerContainerCreated.js";
@@ -54,6 +55,30 @@ export class DockerContainersAPI {
   async logs(
     containerId: string,
     options: {
+      follow: true;
+      stdout?: boolean;
+      stderr?: boolean;
+      since?: number;
+      until?: number;
+      timestamps?: boolean;
+      tail?: number | "all";
+    },
+  ): Promise<Readable>;
+  async logs(
+    containerId: string,
+    options?: {
+      follow?: false;
+      stdout?: boolean;
+      stderr?: boolean;
+      since?: number;
+      until?: number;
+      timestamps?: boolean;
+      tail?: number | "all";
+    },
+  ): Promise<DockerContainerLog[]>;
+  async logs(
+    containerId: string,
+    options: {
       follow?: boolean;
       stdout?: boolean;
       stderr?: boolean;
@@ -61,35 +86,66 @@ export class DockerContainersAPI {
       until?: number;
       timestamps?: boolean;
       tail?: number | "all";
-    } = {
-      follow: false,
-      stdout: false,
-      stderr: false,
-      since: 0,
-      until: 0,
-      timestamps: false,
-      tail: "all",
-    },
-  ) {
+    } = {},
+  ): Promise<Readable | DockerContainerLog[]> {
     const apiOptions: Record<string, string> = {
-      follow: (options?.follow ?? false).toString(),
-      stdout: (options?.stdout ?? false).toString(),
-      stderr: (options?.stderr ?? false).toString(),
-      since: (options?.since ?? 0).toString(),
-      until: (options?.until ?? 0).toString(),
-      timestamps: (options?.timestamps ?? false).toString(),
-      tail: (options?.tail ?? "all").toString(),
+      follow: (options.follow ?? false).toString(),
+      stdout: (options.stdout ?? false).toString(),
+      stderr: (options.stderr ?? false).toString(),
+      since: (options.since ?? 0).toString(),
+      until: (options.until ?? 0).toString(),
+      timestamps: (options.timestamps ?? false).toString(),
+      tail: (options.tail ?? "all").toString(),
     };
+
+    if (options.follow) {
+      const raw = await this.dockerSocket.streamAPICall(
+        "GET",
+        `/containers/${containerId}/logs`,
+        { query: apiOptions },
+      );
+
+      const demuxer = DockerContainersAPI.createDemuxTransform();
+      raw.pipe(demuxer);
+      raw.on("error", (err) => demuxer.destroy(err));
+
+      return demuxer;
+    }
 
     const buffer = await this.dockerSocket.bufferApiCall(
       "GET",
       `/containers/${containerId}/logs`,
-      {
-        query: apiOptions,
-      },
+      { query: apiOptions },
     );
 
     return DockerContainersAPI.demuxDockerStream(buffer);
+  }
+
+  private static createDemuxTransform(): Transform {
+    let buffer = Buffer.alloc(0);
+
+    return new Transform({
+      objectMode: true,
+      transform(chunk: Buffer, _encoding, callback) {
+        buffer = Buffer.concat([buffer, chunk]);
+
+        while (buffer.length >= 8) {
+          const streamType = buffer[0];
+          const frameSize = buffer.readUInt32BE(4);
+          if (buffer.length < 8 + frameSize) break;
+
+          const content = buffer.subarray(8, 8 + frameSize).toString("utf-8");
+          buffer = buffer.subarray(8 + frameSize);
+
+          this.push({
+            content,
+            stream: streamType === 2 ? "STDERR" : "STDOUT",
+          } satisfies DockerContainerLog);
+        }
+
+        callback();
+      },
+    });
   }
 
   private static demuxDockerStream(buffer: Buffer): DockerContainerLog[] {
